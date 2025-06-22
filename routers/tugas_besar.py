@@ -1,11 +1,12 @@
-from fastapi import APIRouter, HTTPException, Query, Request
+from fastapi import APIRouter, HTTPException, Query, Request, Depends
+from auth import get_current_user
 from pydantic import BaseModel, Field
 from typing import List
 from database import db, convert_objectid
 from bson import ObjectId
 from utils import generate_csv_response, generate_excel_response
 
-router = APIRouter()
+router = APIRouter(dependencies=[Depends(get_current_user)])
 
 # -----------------------------
 # Routes
