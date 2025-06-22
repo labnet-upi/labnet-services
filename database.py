@@ -1,10 +1,12 @@
 from motor.motor_asyncio import AsyncIOMotorClient
-from pymongo import ASCENDING
 from bson import ObjectId
+from config import Settings
 
-MONGO_URI = "mongodb://localhost:27017"
-client = AsyncIOMotorClient(MONGO_URI)
-db = client.main_service
+settings = Settings()
+
+# Inisialisasi client dan db secara global
+client = AsyncIOMotorClient(settings.mongo_uri)
+db = client[settings.mongo_db]
 
 def convert_objectid(data):
     """
@@ -17,9 +19,8 @@ def convert_objectid(data):
     elif isinstance(data, dict):
         new_data = {}
         for key, value in data.items():
-            # Ganti key '_id' jadi 'id' dan convert isinya
             if key == "_id":
-                new_data["_id"] = convert_objectid(value)
+                new_data["id"] = convert_objectid(value)
             else:
                 new_data[key] = convert_objectid(value)
         return new_data

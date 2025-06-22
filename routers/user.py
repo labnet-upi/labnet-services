@@ -3,7 +3,7 @@ from pydantic import BaseModel
 from typing import Optional
 from bson import ObjectId
 
-from database import db
+from database import db, convert_objectid
 from auth import get_current_user
 import uuid
 from datetime import datetime, timedelta
@@ -15,45 +15,31 @@ router = APIRouter()
 # -------------------------------
 
 class LoginRequest(BaseModel):
-    nim: str
+    nim: int
 
 class UserCreate(BaseModel):
     name: str
-    nim: str
-    phone: Optional[str] = None
+    nim: int
+    phone: int
     role: str = "mahasiswa"  # bisa juga "asisten"
 
 class UserOut(BaseModel):
     id: str
     name: str
-    nim: str
-    phone: Optional[str]
+    nim: int
+    phone: int
     role: str
 
 class EditProfile(BaseModel):
     name: Optional[str]
-    phone: Optional[str]
-
-# -------------------------------
-# Helper: Convert ObjectId ke str
-# -------------------------------
-
-def convert_objectid(doc):
-    doc = dict(doc)
-    for k, v in doc.items():
-        if isinstance(v, ObjectId):
-            doc[k] = str(v)
-    if "_id" in doc:
-        doc["id"] = str(doc.pop("_id"))
-    return doc
+    phone: int
 
 # -------------------------------
 # Routes
 # -------------------------------
-
 @router.post("/login")
 async def login_user(login: LoginRequest):
-    user = await db.users.find_one({"nim": login.nim})
+    user = await db.users.find_one({"nim": login.nim, "role": "asisten"})
     if not user:
         raise HTTPException(status_code=404, detail="User tidak ditemukan")
 
@@ -65,7 +51,6 @@ async def login_user(login: LoginRequest):
         "nim": user["nim"],
         "role": user["role"],
         "created_at": datetime.utcnow(),
-        "expires_at": datetime.utcnow() + timedelta(days=1)
     }
     await db.sessions.insert_one(session_data)
 
