@@ -51,6 +51,7 @@ async def login_user(login: LoginRequest):
         "nim": user["nim"],
         "role": user["role"],
         "created_at": datetime.utcnow(),
+        "expires_at": datetime.utcnow() + timedelta(days=1)
     }
     await db.sessions.insert_one(session_data)
 
