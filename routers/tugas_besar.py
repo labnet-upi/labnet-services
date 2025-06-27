@@ -95,6 +95,82 @@ def extract_children_only(data, key_children="children"):
 
     return result
 
+async def upsert_aspek_penilaian(
+    body: list,
+    collection_name: str,
+    get_result_function: callable
+):
+    if len(body) == 0:
+        return []
+
+    upserted_ids = []
+    processed_ids = []
+    tahun = body[0]["tahun"]
+    collection = db[collection_name]
+
+    async def update_or_upsert(document_id, update_data):
+        filter_query = {"_id": ObjectId(document_id)} if document_id else update_data
+        result = await collection.update_one(
+            filter_query,
+            {"$set": update_data},
+            upsert=True
+        )
+
+        if result.upserted_id:
+            new_id = str(result.upserted_id)
+            upserted_ids.append(new_id)
+            processed_ids.append(ObjectId(new_id))
+            return new_id
+        else:
+            processed_ids.append(ObjectId(document_id))
+            return document_id
+
+    for item in body:
+        parent_id = item.get("id")
+        parent_data = {
+            "kriteria": item["kriteria"],
+            "tahun": tahun,
+            "isParent": True
+        }
+
+        parent_id = await update_or_upsert(parent_id, parent_data)
+        if parent_id is None:
+            continue
+
+        for child in item.get("children", []):
+            await update_or_upsert(child.get("id"), {
+                "kriteria": child["kriteria"],
+                "bobot": child["bobot"],
+                "tahun": tahun,
+                "isParent": False,
+                "parentId": ObjectId(parent_id)
+            })
+
+    # Hapus parent yang tidak diproses dan anak-anaknya
+    unprocessed_parents = await collection.find({
+        "tahun": tahun,
+        "isParent": True,
+        "_id": {"$nin": processed_ids}
+    }).to_list(None)
+
+    parent_ids_to_delete = [doc["_id"] for doc in unprocessed_parents]
+
+    await collection.delete_many({
+        "$or": [
+            {"_id": {"$in": parent_ids_to_delete}},
+            {"parentId": {"$in": parent_ids_to_delete}}
+        ]
+    })
+
+    # Hapus child yang tidak diproses
+    await collection.delete_many({
+        "tahun": tahun,
+        "isParent": False,
+        "_id": {"$nin": processed_ids}
+    })
+
+    return await get_result_function([tahun])
+
 # -----------------------------
 # Routes
 # -----------------------------
@@ -108,6 +184,15 @@ async def get_aspek_penilaian_kelompok(tahun: int = Query(...)):
     doc = await getAspekPenilaianKelompok([tahun])
     return doc
 
+@router.post("/penilaian/aspek-penilaian-kelompok")
+async def post_aspek_penilaian_kelompok(request: Request):
+    body = await request.json()
+    return await upsert_aspek_penilaian(
+        body=body,
+        collection_name="aspek_penilaian_kelompok",
+        get_result_function=getAspekPenilaianKelompok
+    )
+    
 @router.get("/penilaian/nilai-kelompok")
 async def get_nilai_kelompok(id_kelompok: str = Query(...)):
     doc = await getNilaiKelompokTubes(id_kelompok)
@@ -140,6 +225,15 @@ async def post_nilai_kelompok(request: Request):
 async def get_aspek_penilaian_perorangan(tahun: int = Query(...)):
     doc = await getAspekPenilaianPerorangan([tahun])
     return doc
+
+@router.post("/penilaian/aspek-penilaian-perorangan")
+async def post_aspek_penilaian_perorangan(request: Request):
+    body = await request.json()
+    return await upsert_aspek_penilaian(
+        body=body,
+        collection_name="aspek_penilaian_perorangan",
+        get_result_function=getAspekPenilaianPerorangan
+    )
 
 @router.get("/penilaian/nilai-perorangan")
 async def get_nilai_perorangan(id_kelompok: str = Query(...)):
@@ -250,6 +344,7 @@ async def get_rekap_nilai_perorangan(
             # ambil nilai perorangan
             doc_nilai_perorangan = await db.nilai_perorangan.find_one({"nim": anggota_item["nim"]})
             nilai_kelompok = kelompok.get("nilaiAkhir", 0)
+            nilai_perorangan = 0
             if not doc_nilai_perorangan:
                 nilaiAkhir = (nilai_perorangan + nilai_kelompok) / 2
                 doc_rekap_nilai_perorangan.append({
@@ -266,7 +361,6 @@ async def get_rekap_nilai_perorangan(
             
             # konversi nilai perorangan
             data_nilai_perorangan = convert_objectid(doc_nilai_perorangan.get("nilai", []))
-            nilai_perorangan = 0
             for item in data_nilai_perorangan:
                 # cari bobot dari aspek penilaian
                 bobot = next((ap["bobot"] for ap in doc_aspek_penilaian_perorangan if ap["id"] == item["aspek_penilaian_id"]), 0)
