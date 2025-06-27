@@ -3,7 +3,7 @@
 from fastapi import APIRouter
 from pydantic import BaseModel
 from typing import List
-from database import db
+from utils.database import db
 
 router = APIRouter()
 

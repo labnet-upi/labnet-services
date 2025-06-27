@@ -1,9 +1,7 @@
-# main.py
-
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from routers import user, tugas_besar, inventaris
-import uvicorn
+from routers import user, inventaris
+from routers.tugas_besar import router as tugas_besar_router
 
 app = FastAPI()
 
@@ -18,7 +16,7 @@ app.add_middleware(
 
 # Include routers
 app.include_router(user.router, prefix="/user", tags=["User"])
-app.include_router(tugas_besar.router, prefix="/tugas_besar", tags=["Tubes"])
+app.include_router(tugas_besar_router, prefix="/tugas_besar", tags=["Tubes"])
 app.include_router(inventaris.router, prefix="/inventaris", tags=["Inventaris"])
 
 # @app.on_event("startup")

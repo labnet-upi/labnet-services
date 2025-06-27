@@ -2,7 +2,7 @@ import uuid
 from datetime import datetime, timedelta
 from fastapi import HTTPException, Depends, Request
 from fastapi.security import APIKeyHeader, HTTPAuthorizationCredentials, HTTPBearer
-from database import db
+from utils.database import db
 from bson import ObjectId
 
 # Konfigurasi session

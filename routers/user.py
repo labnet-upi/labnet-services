@@ -3,7 +3,7 @@ from pydantic import BaseModel
 from typing import Optional
 from bson import ObjectId
 
-from database import db, convert_objectid
+from utils.database import db, convert_objectid
 from auth import get_current_user
 import uuid
 from datetime import datetime, timedelta
