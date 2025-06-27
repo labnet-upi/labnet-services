@@ -1,6 +1,6 @@
 from motor.motor_asyncio import AsyncIOMotorClient
 from bson import ObjectId
-from config import Settings
+from core.config import Settings
 
 settings = Settings()
 

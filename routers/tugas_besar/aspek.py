@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Query, Request, Depends
-from auth import get_current_user
+from core.auth import get_current_user
+from utils.database import db
 from bson import ObjectId
 from services.tugas_besar import getAspekPenilaianKelompok, getAspekPenilaianPerorangan
 

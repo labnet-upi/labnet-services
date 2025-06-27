@@ -1,9 +1,8 @@
 from fastapi import APIRouter, HTTPException, Query, Request, Depends
-from auth import get_current_user
-from typing import List
+from core.auth import get_current_user
 from utils.database import db, convert_objectid
 from bson import ObjectId
-from services.tugas_besar import getKelompokTubes, getNilaiKelompokTubes
+from services.tugas_besar import getKelompokTubes, getNilaiKelompokTubes, getNilaiPerorangan
 
 router = APIRouter(dependencies=[Depends(get_current_user)])
 
@@ -11,70 +10,67 @@ router = APIRouter(dependencies=[Depends(get_current_user)])
 # Routes
 # -----------------------------
 @router.get("/daftar-kelompok")
-async def get_daftar_kelompok(angkatan: int = Query(...)):
-    daftarKelompok = await getKelompokTubes({"angkatan": angkatan})
+async def get_daftar_kelompok(tahun: int = Query(...)):
+    daftarKelompok = await getKelompokTubes({"tahun": tahun})
     return daftarKelompok
 
 
 @router.get("/nilai-kelompok")
-async def get_nilai_kelompok(id_kelompok: str = Query(...)):
-    doc = await getNilaiKelompokTubes(id_kelompok)
-    return doc
+async def get_nilai_kelompok(
+    id_kelompok: str = Query(...),
+    current_user: dict = Depends(get_current_user)
+):
+    doc = await getNilaiKelompokTubes(id_kelompok, current_user["_id"])
+    return convert_objectid(doc)
 
 @router.post("/nilai-kelompok")
-async def post_nilai_kelompok(request: Request):
+async def post_nilai_kelompok(
+    request: Request,
+    current_user: dict = Depends(get_current_user)
+):
     body = await request.json()
+    id_kelompok = ObjectId(body["id_kelompok"])
     body["id_kelompok"] = ObjectId(body["id_kelompok"])
+    object_id_penilai = ObjectId(current_user["_id"])
     for index, nilai in enumerate(body['nilai']):
         body['nilai'][index]['aspek_penilaian_id'] = ObjectId(nilai['aspek_penilaian_id'])
     
-    result = await db.nilai_kelompok.update_one(
-        {"id_kelompok": body["id_kelompok"]},
+    await db.nilai_kelompok.update_one(
+        {"id_kelompok": body["id_kelompok"], "id_penilai": object_id_penilai},
         {"$set": body},
         upsert=True
     )
-    
-    if result.modified_count == 0 and result.upserted_id is None:
-        raise HTTPException(status_code=400, detail="Gagal menyimpan nilai kelompok")
-    
-    # mengembalikan upserted_id jika ada
-    response = {
-        "id_kelompok": body["id_kelompok"],
-        "upserted_id": result.upserted_id if result.upserted_id else None
-    }
-    return convert_objectid(response)
+
+    doc = await getNilaiKelompokTubes(id_kelompok, current_user["_id"])
+    return convert_objectid(doc)
 
 @router.get("/nilai-perorangan")
-async def get_nilai_perorangan(id_kelompok: str = Query(...)):
-    # Ambil info kelompok & anggota
-    doc_kelompok_tubes = await getKelompokTubes({"_id": ObjectId(id_kelompok)})
-    if not doc_kelompok_tubes:
-        raise HTTPException(status_code=404, detail="Kelompok tidak ditemukan")
-
-    kelompok = doc_kelompok_tubes[0]
-    anggota = kelompok.get("anggota", [])
-
-    hasil = []
-
-    for item in anggota:
-        nilai = await db.nilai_perorangan.find_one({"nim": item["nim"]})
-        item_result = convert_objectid(nilai) if nilai else None
-        hasil.append(item_result)
-
+async def get_nilai_perorangan(
+    id_kelompok: str = Query(...),
+    current_user: dict = Depends(get_current_user)
+):
+    hasil = await getNilaiPerorangan(id_kelompok, current_user["_id"])
     return hasil
 
 @router.post("/nilai-perorangan")
-async def post_nilai_perorangan(request: Request):
+async def post_nilai_perorangan(
+    request: Request,
+    current_user: dict = Depends(get_current_user)
+):
     body = await request.json()
     
     if not isinstance(body, list):
         raise HTTPException(status_code=400, detail="Payload harus berupa array")
-
-    upserted_ids = []
-
+    object_id_penilai = ObjectId(current_user["_id"])
+    id_kelompok = body[0]["id_kelompok"]
+    object_id_kelompok = ObjectId(id_kelompok)
     for item in body:
-        if 'nim' not in item or 'nilai' not in item:
-            raise HTTPException(status_code=400, detail="Setiap item harus memiliki 'nim' dan 'nilai'")
+        if 'id_mahasiswa' not in item or 'nilai' not in item:
+            raise HTTPException(status_code=400, detail="Setiap item harus memiliki 'id_mahasiswa' dan 'nilai'")
+        
+        item['id_penilai'] = object_id_penilai
+        item["id_kelompok"] = object_id_kelompok
+        item["id_mahasiswa"] = ObjectId(item["id_mahasiswa"])
         
         # Konversi ObjectId pada aspek_penilaian_id
         for index, nilai in enumerate(item['nilai']):
@@ -82,14 +78,9 @@ async def post_nilai_perorangan(request: Request):
 
         # Lakukan upsert
         result = await db.nilai_perorangan.update_one(
-            {"nim": item["nim"]},
+            {"id_mahasiswa": item["id_mahasiswa"], "id_penilai": object_id_penilai},
             {"$set": item},
             upsert=True
         )
-
-        if result.modified_count == 0 and result.upserted_id is None:
-            raise HTTPException(status_code=400, detail=f"Gagal menyimpan nilai untuk NIM {item['nim']}")
-
-        upserted_ids.append(result.upserted_id if result.upserted_id else item["nim"])
-
-    return convert_objectid(upserted_ids)
+    hasil = await getNilaiPerorangan(id_kelompok, current_user["_id"])
+    return hasil

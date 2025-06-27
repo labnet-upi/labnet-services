@@ -4,7 +4,7 @@ from typing import Optional
 from bson import ObjectId
 
 from utils.database import db, convert_objectid
-from auth import get_current_user
+from core.auth import get_current_user
 import uuid
 from datetime import datetime, timedelta
 
