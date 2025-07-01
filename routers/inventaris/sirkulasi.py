@@ -28,13 +28,13 @@ async def post_sirkulasi(
     current_user: dict = Depends(get_current_user)
 ):
     body = await request.json()
-    formulir, formulir_id = await simpanFormulirSirkulasiBarang(body["penanggung_jawab"], ObjectId(current_user["_id"]))
+    formulir, formulir_id = await upsertFormulirSirkulasiBarang(body["penanggung_jawab"], ObjectId(current_user["_id"]), True)
     barang_raw = body["barang"]
-    barang_dicatat = await simpanBarangSirkulasi(barang_raw, formulir, formulir_id)
-    result = await perbaruiJumlahTerkiniBarang(formulir, barang_raw)
+    barang_dicatat = await upsertBarangSirkulasi(barang_raw, formulir, formulir_id)
+    result = await perbaruiJumlahTerkiniBarang(formulir, barang_raw, formulir["status_sirkulasi"] != "peminjaman", "id")
 
-    if formulir["status_sirkulasi"] == "Pengembalian":
-        await kurangiJumlahBelumDikembalikanBarangSirkulasi(barang_dicatat)
+    if formulir["status_sirkulasi"] == "pengembalian":
+        await perbaruiJumlahBelumDikembalikanBarangSirkulasi(barang_dicatat, False)
         await perbaruStatusPengembalianBarang(str(formulir["id_formulir_sebelumnya"]))
         
     return {
@@ -43,3 +43,45 @@ async def post_sirkulasi(
         "jumlah_barang_dicatat": len(barang_dicatat),
         "jumlah_barang_diupdate": result.modified_count
     }
+
+@router.patch("/")
+async def patch_sirkulasi(
+    request: Request,
+    current_user: dict = Depends(get_current_user)
+):
+    body = await request.json()
+    #periksa apakah peminjaman
+    formulir_request = body["penanggung_jawab"]
+    if formulir_request["status_sirkulasi"] != "peminjaman":
+        return { "message" : "belum tersedia untuk pengembalian"}
+    
+    #perbarui formulir peminjaman
+    formulir, formulir_id = await upsertFormulirSirkulasiBarang(formulir_request, ObjectId(current_user["_id"]), False)
+    #perbarui jumlah terkini barang
+    result_sinkorinasi = await perbaruiDanSinkronisasiBarang(formulir, body)
+    #perbarui barang sirkulasi
+    barang_raw = body["barang"]
+    barang_dicatat = await upsertBarangSirkulasi(barang_raw, formulir, formulir_id)
+            
+    return {
+        "message": "Peminjaman berhasil diubah",
+        "formulir_id": convert_objectid(formulir_id),
+        "jumlah_barang_dicatat": len(barang_dicatat),
+        "update_bingung_hehe": convert_objectid(result_sinkorinasi)
+    }
+
+@router.delete("/")
+async def delete_sirkulasi(id_formulir: str):
+    formulir = await getFormulirSirkulasi(id_formulir)
+    result={}
+    if formulir["status_sirkulasi"] == "peminjaman":
+        result["jumlah_barang_diganti"] = await kembalikanJumlahTerkiniBarang(formulir)
+        result["jumlah_barang_sirkulasi_dihapus"] = await hapusBarangSirkulasi(formulir["_id"])
+    else:
+        result["jumlah_formulir_diganti"] = await perbaruiStatusDikembalikanFormulirSirkulasi(formulir["id_formulir_sebelumnya"])
+        result["jumlah_barang_sirkulasi_diganti"] = await kembalikanJumlahBarangSirkulasi(formulir["_id"])
+        result["jumlah_barang_diganti"] = await kembalikanJumlahTerkiniBarang(formulir)
+
+    # hapus formulir
+    result["jumlah_formulir_sirkulasi_dihapus"] = await hapusFormulirSirkulasi(formulir["_id"])
+    return []
