@@ -8,16 +8,20 @@ from services.inventaris import *
 router = APIRouter(dependencies=[Depends(get_current_user)])
 
 @router.get("/")
-async def get_form_sirkulasi(id_formulir: Optional[str] = None):
-    pipeline = getPipeLineFormSirkulasi(id_formulir)
-    cursor = db.formulir_sirkulasi_barang.aggregate(pipeline)
+async def get_form_sirkulasi(status_sirkulasi: Optional[str] = "semua", id_formulir: Optional[str] = None):
     if id_formulir:
-        result = await cursor.to_list(length=1)
-        result = result[0]
+        informasi_sirkulasi = await getFormulirSirkulasi(id_formulir)
+        pilihan_barang = await getDataBarangSirkulasi(id_formulir, status_sirkulasi == "peminjaman")
+        result = {
+            "informasi_sirkulasi": informasi_sirkulasi,
+            "pilihan_barang": pilihan_barang
+        }
     else:
+        pipeline = getPipeLineFormSirkulasi()
+        cursor = db.formulir_sirkulasi_barang.aggregate(pipeline)
         result = await cursor.to_list(length=None)
     return convert_objectid(result)
-
+ 
 @router.post("/")
 async def post_sirkulasi(
     request: Request,

@@ -14,6 +14,23 @@ async def get_barang(status: Literal["semua", "dipinjam", "tidak_dipinjam"] = "s
     result = await cursor.to_list(length=None)
     return convert_objectid(result)
 
+@router.get("/saran-isi")
+async def get_saran_isi():
+    cursor = db.barang.aggregate([
+        { "$sort": { "nama": -1 } },
+        {
+            "$group": {
+            "_id": "$nama",
+            "doc": { "$first": "$$ROOT" }
+            }
+        },
+        {
+            "$replaceRoot": { "newRoot": "$doc" }
+        }
+    ])
+    result = await cursor.to_list(length=None)
+    return convert_objectid(result)
+
 @router.post("/")
 async def post_barang(
     request: Request,
