@@ -60,7 +60,7 @@ def get_barang_pipeline(
 
     return pipeline
 
-def getPipeLineFormSirkulasi(id_formulir: Optional[str]):
+def getPipeLineFormSirkulasi(id_formulir: Optional[str] = None):
     pipeline = [
         {
             "$lookup": {
@@ -146,7 +146,6 @@ async def perbaruStatusPengembalianBarang(id_formulir):
     cursor = db.formulir_sirkulasi_barang.aggregate(pipeline)
     result = await cursor.to_list(length=1)
     result = result[0]
-    print(result)
 
     i = 0
     data_barang_sirkulasi = result["data_barang_sirkulasi"]
@@ -216,3 +215,67 @@ async def perbaruiJumlahTerkiniBarang(formulir, barang_raw):
 
     result = await db.barang.bulk_write(operations, ordered=False)
     return result
+
+
+async def getDataBarangSirkulasiByFormulir(id_formulir: str):
+    pipeline = [{"$match": {"id_formulir": ObjectId(id_formulir)}}]
+    cursor = db.barang_sirkulasi.aggregate(pipeline)
+    result = await cursor.to_list(length=None)
+    return result
+
+async def getBarangBerisisan(barang_sirkulasi_ids):
+    pipeline = get_barang_pipeline()
+    pipeline = [{ "$match": { "$expr": { "$in": ["$_id", barang_sirkulasi_ids] } } }] + pipeline
+    cursor = db.barang.aggregate(pipeline)
+    result = await cursor.to_list(length=None)
+    return result
+
+async def getBarangTidakDipinjam():
+    pipeline = get_barang_pipeline("tidak_dipinjam")
+    cursor = db.barang.aggregate(pipeline)
+    result = await cursor.to_list(length=None)
+    return result
+
+async def getDataBarangSirkulasi(id_formulir: str, is_peminjaman: bool):
+    #get data barang_sirkulasi yang id_formulirnya sama
+    barang_sirkulasi = await getDataBarangSirkulasiByFormulir(id_formulir)
+    dict_barang_sirkulasi = {str(item["id_barang"]): item for item in barang_sirkulasi}
+
+    #tampung deret id barang dari barang_sirkulasi
+    barang_sirkulasi_ids = [item['id_barang'] for item in barang_sirkulasi]
+
+    #get data barang yang left join seperti di barang, tapi idnya dari yg tadi
+    barang_berisisan = await getBarangBerisisan(barang_sirkulasi_ids)
+
+    #olah data
+    def setDataBarang(list_barang):
+        for barang in list_barang:
+            barang_sirkulasi_founded = dict_barang_sirkulasi[str(barang["_id"])]
+            barang["id_barang_sirkulasi"] = barang_sirkulasi_founded["_id"]
+            barang["keterangan"] = barang_sirkulasi_founded["keterangan"]
+            barang["jumlah_dicatat"] = barang_sirkulasi_founded["jumlah_dicatat"]
+            barang["checked"] = True
+            barang["jumlah_belum_dikembalikan"] = barang_sirkulasi_founded["jumlah_belum_dikembalikan"]
+            if is_peminjaman:
+                barang["jumlah_maks_dapat_dicatat"] = barang["jumlah_terkini"] + barang_sirkulasi_founded["jumlah_dicatat"]
+            
+            if barang.get("children", False) and len(barang["children"]) > 0:
+                barang["children"] = setDataBarang(barang["children"])
+        return list_barang
+    result = setDataBarang(barang_berisisan)
+
+    #untuk peminjaman, concat juga data tidak dipinjam
+    if is_peminjaman:
+        barang_tidak_dipinjam = await getBarangTidakDipinjam()
+        barang_tidak_dipinjam = [{**item, "jumlah_maks_dapat_dicatat": item["jumlah_terkini"], "jumlah_dicatat": item["jumlah_terkini"]} for item in barang_tidak_dipinjam]
+        result = result + barang_tidak_dipinjam
+
+    return result
+
+async def getFormulirSirkulasi(id_formulir):
+    pipeline = [
+        {"$match": { "_id": ObjectId(id_formulir)}}
+    ]
+    cursor = db.formulir_sirkulasi_barang.aggregate(pipeline)
+    result = await cursor.to_list(length=1)
+    return result[0]
