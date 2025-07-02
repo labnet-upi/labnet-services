@@ -37,3 +37,22 @@ def generate_excel_response(data, filename="data.xlsx", sheet_name="Sheet1"):
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         headers=headers
     )
+
+def generate_excel_multisheet_response(sheets: dict, filename="data.xlsx"):
+    output = io.BytesIO()
+    with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
+        for sheet_name, data in sheets.items():
+            df = pd.DataFrame(data)
+            df.to_excel(writer, sheet_name=sheet_name, index=False)
+    output.seek(0)
+
+    headers = {
+        "Content-Disposition": f'attachment; filename="{filename}"',
+        "Access-Control-Expose-Headers": "Content-Disposition",
+    }
+
+    return StreamingResponse(
+        output,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers=headers
+    )

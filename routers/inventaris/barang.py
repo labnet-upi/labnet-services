@@ -5,14 +5,55 @@ from utils.database import db, convert_objectid, flatten_with_relations, convert
 from bson import ObjectId
 from datetime import datetime, timezone
 from services.inventaris import get_barang_pipeline, sync_barang_hirarki
+from utils.generate_file_response import generate_excel_multisheet_response
 
 router = APIRouter(dependencies=[Depends(get_current_user)])
 
 @router.get("/")
-async def get_barang(status: Literal["semua", "dipinjam", "tidak_dipinjam"] = "semua"):
+async def get_barang(status: Literal["semua", "dipinjam", "tidak_dipinjam"] = "semua", format: str = Query("json")):
     cursor = db.barang_aktif.aggregate(get_barang_pipeline(status))
     result = await cursor.to_list(length=None)
-    return convert_objectid(result)
+    if format == "json":
+        return convert_objectid(result)
+    elif format == "excel":
+        def flatten_with_indent(data: list, indent_char: str = "»") -> list:
+            result = []
+            for parent in data:
+                parent_data = {k: v for k, v in parent.items() if k != "id" and k != "children"}
+                parent_data["Level"] = 0
+                result.append(parent_data)
+
+                for child in parent.get("children", []):
+                    child_data = {k: v for k, v in child.items() if k != "id"}
+                    if "nama" in child_data:
+                        child_data["nama"] = f"{indent_char} {child_data['nama']}"
+                    child_data["Level"] = 1
+                    result.append(child_data)
+
+            return result
+    
+        def split_to_sheets(data: list) -> dict:
+            parents = [
+                {k: v for k, v in parent.items() if k != "id" and k != "children"}
+                for parent in data
+            ]
+
+            children = [
+                {
+                    **{k: v for k, v in child.items() if k != "id"},
+                    "parent_kode": parent.get("kode")
+                }
+                for parent in data
+                for child in parent.get("children", [])
+            ]
+
+            return {
+                "Induk": parents,
+                "Anak": children
+            }
+
+        sheet_data = split_to_sheets(result)
+        return generate_excel_multisheet_response(sheet_data, filename="daftar_barang.xlsx")
 
 @router.get("/saran-isi")
 async def get_saran_isi():
