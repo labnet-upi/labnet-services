@@ -1,6 +1,7 @@
 from motor.motor_asyncio import AsyncIOMotorClient
 from bson import ObjectId
 from core.config import Settings
+import re
 
 settings = Settings()
 
@@ -30,9 +31,6 @@ def convert_objectid(data):
     
     else:
         return data
-
-from bson import ObjectId
-import re
 
 def convert_to_objectid(data):
     """

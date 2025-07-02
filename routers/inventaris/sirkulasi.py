@@ -4,6 +4,7 @@ from core.auth import get_current_user
 from utils.database import db, convert_objectid
 from bson import ObjectId
 from services.inventaris import *
+from utils.generate_file_response import generate_excel_response
 
 router = APIRouter(dependencies=[Depends(get_current_user)])
 
@@ -17,11 +18,29 @@ async def get_form_sirkulasi(status_sirkulasi: Optional[str] = "semua", id_formu
             "pilihan_barang": pilihan_barang
         }
     else:
-        pipeline = getPipeLineFormSirkulasi()
-        cursor = db.formulir_sirkulasi_barang.aggregate(pipeline)
-        result = await cursor.to_list(length=None)
+        result = await getListSirkulasi()
     return convert_objectid(result)
- 
+
+@router.get("/laporan")
+async def get_laporan():
+    raw_data = await getListSirkulasi()
+    result = []
+    for formulir in raw_data:
+        result_barang = ";".join(f"{barang_sirkulasi["barang"]['kode']}:{barang_sirkulasi['jumlah_dicatat']}" for barang_sirkulasi in formulir["data_barang_sirkulasi"])
+        temp_result = {
+            "nama": formulir["nama"],
+            "notel": formulir["notel"],
+            "status": formulir["status_sirkulasi"],
+            "barang": result_barang,
+            "pencatat": formulir["pencatat"]["nama"],
+            "notel_pencatat": formulir["pencatat"]["nama"],
+            "tanggal_pencatatan": formulir["tanggal_pencatatan"],
+        }
+        result.append(temp_result)
+    today_str = datetime.today().strftime('%Y%m%d')
+    filename = f"laporan_sirkulasi_{today_str}.xlsx"
+    return generate_excel_response(result, filename)
+
 @router.post("/")
 async def post_sirkulasi(
     request: Request,

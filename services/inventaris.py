@@ -3,8 +3,9 @@ from typing import Literal
 from bson import ObjectId
 from pymongo import UpdateOne, InsertOne, DeleteOne
 from datetime import datetime, timezone
-from utils.database import db, convert_objectid
+from utils.database import db
 import copy
+from core.logger import logger
 
 def get_barang_pipeline(
     status: Literal["semua", "dipinjam", "tidak_dipinjam"] = "semua"
@@ -143,7 +144,7 @@ async def upsertFormulirSirkulasiBarang(data_penanggung_jawab, object_user_id, i
     # Tambahkan ini hanya kalau insert
     if is_insert:
         formulir_common["id_pencatat"] = object_user_id
-        formulir_common["tanggal_pencatatan"] = datetime.fromisoformat(pj["tanggal"]).isoformat()
+        formulir_common["tanggal_pencatatan"] = now_iso
 
     result = await db.formulir_sirkulasi_barang.update_one(
         {"_id": id_formulir},
@@ -156,14 +157,14 @@ async def upsertFormulirSirkulasiBarang(data_penanggung_jawab, object_user_id, i
 
 async def perbaruStatusPengembalianBarang(id_formulir):
     pipeline = getPipeLineFormSirkulasi(id_formulir)
-    print("pipeline", pipeline)
-    print("id_formulir", id_formulir)
+    logger.debug("pipeline", pipeline)
+    logger.debug("id_formulir", id_formulir)
     cursor = db.formulir_sirkulasi_barang.aggregate(pipeline)
     result = await cursor.to_list(length=1)
     result = result[0]
 
     data_barang_sirkulasi = result["data_barang_sirkulasi"]
-    print("data_barang_sirkulasi", data_barang_sirkulasi)
+    logger.debug("data_barang_sirkulasi", data_barang_sirkulasi)
     sudahDikembalikanSemua = all(
         barang_sirkulasi["jumlah_belum_dikembalikan"] == 0 for barang_sirkulasi in data_barang_sirkulasi
     )
@@ -235,7 +236,7 @@ async def perbaruiJumlahBelumDikembalikanBarangSirkulasi(barang_sirkulasi_terkin
     result = {}
     if operations:
         result = await db.barang_sirkulasi.bulk_write(operations)
-        print("berjalan")
+        logger.debug("berjalan")
     
     return result
 
@@ -259,7 +260,7 @@ async def perbaruiJumlahTerkiniBarang(formulir, barang_raw, positif, keyname):
     result = {}
     if operations:
         result = await db.barang.bulk_write(operations, ordered=False)
-        print("berjalan")
+        logger.debug("berjalan")
 
     return result
 
@@ -279,7 +280,7 @@ async def getBarangBerisisan(barang_sirkulasi_ids):
 
 async def getBarangTidakDipinjam():
     pipeline = get_barang_pipeline("tidak_dipinjam")
-    cursor = db.barang.aggregate(pipeline)
+    cursor = db.barang_aktif.aggregate(pipeline)
     result = await cursor.to_list(length=None)
     return result
 
@@ -340,7 +341,6 @@ async def getFormulirSirkulasi(id_formulir):
 async def kembalikanJumlahTerkiniBarang(formulir):
     cursor_barang_sirkulasi = db.barang_sirkulasi.aggregate([{"$match": { "id_formulir": formulir["_id"]}}])
     barang_sirkulasi = await cursor_barang_sirkulasi.to_list(length=None)
-    # return convert_objectid(barang_sirkulasi)
     result = await perbaruiJumlahTerkiniBarang(formulir, barang_sirkulasi, formulir["status_sirkulasi"] == "peminjaman", "id_barang")
     return result.modified_count if result.modified_count else 0
 
@@ -374,19 +374,19 @@ async def perbaruiDanSinkronisasiBarang(formulir, body):
     # Data baru dari request
     data_barang_sirkulasi_baru = body["barang"]
     dict_barang_sirkulasi_baru = {str(item["id"]): item for item in data_barang_sirkulasi_baru}
-    print("Barang sirkulasi baru:", dict_barang_sirkulasi_baru)
+    logger.debug("Barang sirkulasi baru:", dict_barang_sirkulasi_baru)
 
     # Data lama dari database
     data_barang_sirkulasi_lama = await getDataBarangSirkulasiByFormulir(str(formulir["_id"]))
     dict_barang_sirkulasi_lama = {str(item["_id"]): item for item in data_barang_sirkulasi_lama}
-    print("Barang sirkulasi lama:", dict_barang_sirkulasi_lama)
+    logger.debug("Barang sirkulasi lama:", dict_barang_sirkulasi_lama)
 
     # Tangani barang yang baru (insert atau update)
     for id_baru, barang_baru in dict_barang_sirkulasi_baru.items():
         if id_baru in dict_barang_sirkulasi_lama:
             barang_lama = dict_barang_sirkulasi_lama[id_baru]
             selisih = barang_lama["jumlah_dicatat"] - barang_baru["jumlah_dicatat"]
-            print(f"Update: ID {id_baru}, selisih: {selisih}")
+            logger.debug(f"Update: ID {id_baru}, selisih: {selisih}")
             if selisih != 0:
                 operations_barang.append(
                     UpdateOne(
@@ -406,7 +406,7 @@ async def perbaruiDanSinkronisasiBarang(formulir, body):
                 )
         else:
             # Data baru → insert barang_sirkulasi dan update jumlah_terkini
-            print(f"Insert baru: ID {id_baru}")
+            logger.debug(f"Insert baru: ID {id_baru}")
             operations_barang_sirkulasi.append(
                 InsertOne({
                     "id_formulir": ObjectId(formulir["_id"]),
@@ -426,7 +426,7 @@ async def perbaruiDanSinkronisasiBarang(formulir, body):
     # Tangani barang yang dihapus dari form
     for id_lama, barang_lama in dict_barang_sirkulasi_lama.items():
         if id_lama not in dict_barang_sirkulasi_baru:
-            print(f"Delete: ID {id_lama}")
+            logger.debug(f"Delete: ID {id_lama}")
             operations_barang_sirkulasi.append(
                 DeleteOne({ "_id": ObjectId(id_lama) })
             )
@@ -438,8 +438,8 @@ async def perbaruiDanSinkronisasiBarang(formulir, body):
             )
 
     # Log operasi sebelum eksekusi
-    print("Operasi barang_sirkulasi:", operations_barang_sirkulasi)
-    print("Operasi barang:", operations_barang)
+    logger.debug("Operasi barang_sirkulasi:", operations_barang_sirkulasi)
+    logger.debug("Operasi barang:", operations_barang)
 
     # Eksekusi bulk
     if operations_barang_sirkulasi:
@@ -456,4 +456,55 @@ async def perbaruiDanSinkronisasiBarang(formulir, body):
         "barang": {
             "updated": len(operations_barang)
         }
+    }
+
+async def getListSirkulasi():
+    pipeline = getPipeLineFormSirkulasi()
+    cursor = db.formulir_sirkulasi_barang.aggregate(pipeline)
+    result = await cursor.to_list(length=None)
+    return result
+
+
+async def sync_barang_hirarki(parentId: ObjectId, barang_hirarki_baru: list):
+    # Ambil data relasi lama dari database
+    cursor = db.barang_hirarki.find({"parentId": parentId})
+    barang_hirarki_lama = await cursor.to_list(length=None)
+
+    # Konversi relasi menjadi set of tuples (parentId, childId) agar mudah dibandingkan
+    set_lama = set((str(rel["parentId"]), str(rel["childId"])) for rel in barang_hirarki_lama)
+    set_baru = set((str(parentId), str(child["id"])) for child in barang_hirarki_baru)
+
+    # Cari yang perlu di-insert (baru, tapi belum ada)
+    to_insert = set_baru - set_lama
+    # Cari yang perlu dihapus (lama, tapi tidak ada di baru)
+    to_delete = set_lama - set_baru
+
+
+    bulk_ops = []
+
+    # Siapkan operasi insert
+    for parent, child in to_insert:
+        bulk_ops.append(InsertOne({
+            "parent_id": ObjectId(parent),
+            "child_id": ObjectId(child)
+        }))
+
+    # Siapkan operasi delete
+    for parent, child in to_delete:
+        bulk_ops.append(DeleteOne({
+            "parent_id": ObjectId(parent),
+            "child_id": ObjectId(child)
+        }))
+
+    # Eksekusi bulk jika ada operasi
+    if bulk_ops:
+        result = await db.barang_hirarki.bulk_write(bulk_ops)
+        return {
+            "inserted_count": result.inserted_count,
+            "deleted_count": result.deleted_count
+        }
+
+    return {
+        "inserted_count": 0,
+        "deleted_count": 0
     }
