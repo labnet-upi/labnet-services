@@ -13,7 +13,7 @@ COPY requirements.txt .
 RUN pip install --upgrade pip && pip install --no-cache-dir -r requirements.txt
 
 # Copy source code
-COPY app ./app
+COPY . ./app
 COPY .env* ./
 RUN mkdir -p scripts
 COPY run-*.sh ./scripts/
