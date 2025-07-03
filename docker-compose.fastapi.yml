@@ -10,9 +10,9 @@ services:
       - .env.production    # Atau .env.production
     ports:
       - "8000:8000"
-    # volumes:
-    #   - ./app:/app/app      # Hot reload di dev
-    #   - ./scripts:/app/scripts
+    volumes:
+      - ./app:/app/app      # Hot reload di dev
+      - ./scripts:/app/scripts
     networks:
       - labnet-upi
     # depends_on:
