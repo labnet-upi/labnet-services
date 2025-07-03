@@ -15,7 +15,8 @@ RUN pip install --upgrade pip && pip install --no-cache-dir -r requirements.txt
 # Copy source code
 COPY app ./app
 COPY .env* ./
-COPY scripts ./scripts
+RUN mkdir -p scripts
+COPY run-*.sh ./scripts/
 
 # Default env vars
 ENV APP_MODULE=app.main:app
