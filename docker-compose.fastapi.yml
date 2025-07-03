@@ -4,10 +4,10 @@ services:
   fastapi:
     build:
       context: .
-      target: development  # Ganti ke 'production' untuk image prod
+      target: production  # Ganti ke 'production' untuk image prod
     container_name: fastapi
     env_file:
-      - .env.development    # Atau .env.production
+      - .env.production    # Atau .env.production
     ports:
       - "8000:8000"
     volumes:
