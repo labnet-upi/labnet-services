@@ -1,0 +1,23 @@
+version: '3.8'
+
+services:
+  fastapi:
+    build:
+      context: .
+      target: development  # Ganti ke 'production' untuk image prod
+    container_name: fastapi
+    env_file:
+      - .env.development    # Atau .env.production
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./app:/app/app      # Hot reload di dev
+      - ./scripts:/app/scripts
+    networks:
+      - labnet-upi
+    depends_on:
+      - mongo
+
+networks:
+  labnet-upi:
+    external: true
