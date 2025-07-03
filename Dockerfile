@@ -16,7 +16,7 @@ RUN pip install --upgrade pip && pip install --no-cache-dir -r requirements.txt
 COPY . ./app
 COPY .env* ./
 RUN mkdir -p scripts
-COPY run-*.sh ./scripts/
+COPY run_*.sh ./scripts/
 
 # Default env vars
 ENV APP_MODULE=app.main:app
@@ -26,9 +26,9 @@ ENV PORT=8000
 # === DEVELOPMENT IMAGE ===
 FROM base AS development
 
-CMD ["bash", "scripts/run-dev.sh"]
+CMD ["bash", "scripts/run_dev.sh"]
 
 # === PRODUCTION IMAGE ===
 FROM base AS production
 
-CMD ["bash", "scripts/run-prod.sh"]
+CMD ["bash", "scripts/run_prod.sh"]
