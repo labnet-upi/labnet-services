@@ -7,3 +7,4 @@ pymongo==4.13.2
 uvicorn[standard]         # Untuk dev server (run-dev.sh)
 gunicorn                  # Untuk prod server (run-prod.sh)
 python-dotenv             # Untuk membaca .env file di dalam Docker
+pydantic-settings
