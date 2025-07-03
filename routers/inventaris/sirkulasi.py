@@ -26,7 +26,7 @@ async def get_laporan():
     raw_data = await getListSirkulasi()
     result = []
     for formulir in raw_data:
-        result_barang = ";".join(f"{barang_sirkulasi["barang"]['kode']}:{barang_sirkulasi['jumlah_dicatat']}" for barang_sirkulasi in formulir["data_barang_sirkulasi"])
+        result_barang = ";".join(f"{barang_sirkulasi['barang']['kode']}:{barang_sirkulasi['jumlah_dicatat']}" for barang_sirkulasi in formulir["data_barang_sirkulasi"])
         temp_result = {
             "nama": formulir["nama"],
             "notel": formulir["notel"],

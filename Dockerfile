@@ -2,7 +2,7 @@
 FROM python:3.11-slim AS base
 
 # Set workdir
-WORKDIR /
+WORKDIR /app
 
 # Install system deps
 RUN apt-get update && apt-get install -y build-essential curl && \
