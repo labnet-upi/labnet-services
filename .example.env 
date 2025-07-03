@@ -1,3 +1,7 @@
+APP_MODULE=app.main:app
+HOST=0.0.0.0
+PORT=8000
+
 MONGO_USERNAME=fastapi_user
 MONGO_PASSWORD=rahasia123
 MONGO_HOST=localhost
