@@ -19,7 +19,7 @@ COPY . ./
 COPY run_*.sh ./
 
 # Default env vars
-ENV APP_MODULE=app.main:app
+ENV APP_MODULE=main:app
 ENV HOST=0.0.0.0
 ENV PORT=8000
 
