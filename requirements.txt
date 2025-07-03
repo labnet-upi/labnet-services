@@ -3,7 +3,6 @@ motor==3.7.1
 pandas==2.3.0
 pydantic==2.11.7
 pymongo==4.13.2
-starlette==0.47.1
 
 uvicorn[standard]         # Untuk dev server (run-dev.sh)
 gunicorn                  # Untuk prod server (run-prod.sh)
