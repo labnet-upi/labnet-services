@@ -6,4 +6,4 @@ if [ -f ".env.production" ]; then
 fi
 
 echo "🚀 Menjalankan FastAPI (production mode)..."
-gunicorn -k uvicorn.workers.UvicornWorker "$APP_MODULE" --bind "$HOST:$PORT" --workers 4
+gunicorn -k uvicorn.workers.UvicornWorker "$APP_MODULE" --bind "$HOST:$PORT"
