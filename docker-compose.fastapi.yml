@@ -15,8 +15,8 @@ services:
       - ./scripts:/app/scripts
     networks:
       - labnet-upi
-    depends_on:
-      - mongo
+    # depends_on:
+    #   - mongo
 
 networks:
   labnet-upi:
